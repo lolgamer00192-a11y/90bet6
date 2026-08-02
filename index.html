@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>۹۰ بت | نمودار زنده</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
+    body { background: #0b0e17; color: #e0e0e0; min-height: 100vh; overflow-x: hidden; }
+    
+    header {
+        background: #111827;
+        padding: 16px 30px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 2px solid #22c55e;
+    }
+    .logo { font-size: 26px; font-weight: 900; color: #22c55e; letter-spacing: 1px; }
+    .balance { background: #1f2937; padding: 8px 20px; border-radius: 40px; font-size: 18px; }
+    .balance span { color: #22c55e; font-weight: 700; }
+
+    .main {
+        max-width: 1100px;
+        margin: 25px auto;
+        padding: 0 15px;
+        display: grid;
+        grid-template-columns: 1fr 320px;
+        gap: 20px;
+    }
+
+    .chart-box {
+        background: #111827;
+        border-radius: 16px;
+        padding: 20px;
+        border: 1px solid #1f2937;
+        position: relative;
+    }
+    canvas {
+        width: 100%;
+        height: 420px;
+        background: #0b0e17;
+        border-radius: 12px;
+        display: block;
+    }
+    .current-price {
+        position: absolute;
+        top: 30px;
+        left: 30px;
+        font-size: 32px;
+        font-weight: 800;
+        color: #22c55e;
+        text-shadow: 0 0 15px rgba(34,197,94,0.4);
+    }
+    .trend {
+        position: absolute;
+        top: 70px;
+        left: 30px;
+        font-size: 16px;
+        font-weight: 600;
+    }
+    .up { color: #22c55e; }
+    .down { color: #ef4444; }
+
+    .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    .card {
+        background: #111827;
+        border-radius: 16px;
+        padding: 20px;
+        border: 1px solid #1f2937;
+    }
+    .card h3 {
+        margin-bottom: 14px;
+        color: #22c55e;
+        font-size: 17px;
+    }
+    input[type="number"] {
+        width: 100%;
+        padding: 13px;
+        border-radius: 10px;
+        border: 1px solid #374151;
+        background: #0b0e17;
+        color: #fff;
+        font-size: 16px;
+        margin-bottom: 12px;
+    }
+    .bet-buttons {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+    .btn {
+        padding: 16px;
+        border: none;
+        border-radius: 12px;
+        font-size: 18px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+    .btn-up {
+        background: #16a34a;
+        color: white;
+    }
+    .btn-up:hover { background: #22c55e; transform: scale(1.03); }
+    .btn-down {
+        background: #dc2626;
+        color: white;
+    }
+    .btn-down:hover { background: #ef4444; transform: scale(1.03); }
+
+    .timer {
+        text-align: center;
+        font-size: 28px;
+        font-weight: 800;
+        color: #fbbf24;
+        margin: 10px 0;
+    }
+    .result {
+        text-align: center;
+        font-size: 20px;
+        font-weight: 700;
+        min-height: 30px;
+        margin-top: 10px;
+    }
+    .history-item {
+        padding: 10px 0;
+        border-bottom: 1px solid #1f2937;
+        font-size: 14px;
+        display: flex;
+        justify-content: space-between;
+    }
+    .win { color: #22c55e; }
+    .lose { color: #ef4444; }
+
+    @media (max-width: 850px) {
+        .main { grid-template-columns: 1fr; }
+        canvas { height: 320px; }
+    }
+</style>
+</head>
+<body>
+<header>
+    <div class="logo">۹۰ بت</div>
+    <div class="balance">موجودی: <span id="balance">5,000,000</span> تومان</div>
+</header>
+
+<div class="main">
+    <div class="chart-box">
+        <div class="current-price" id="price">100.00</div>
+        <div class="trend" id="trend">● در حال حرکت...</div>
+        <canvas id="chart"></canvas>
+    </div>
+
+    <div class="controls">
+        <div class="card">
+            <h3>شرط ببند</h3>
+            <input type="number" id="stake" placeholder="مبلغ شرط (تومان)" min="1000" value="50000">
+            
+            <div class="timer" id="timer">۱۵</div>
+            
+            <div class="bet-buttons">
+                <button class="btn btn-up" onclick="placeBet('up')">▲ بالا</button>
+                <button class="btn btn-down" onclick="placeBet('down')">▼ پایین</button>
+            </div>
+            
+            <div class="result" id="result"></div>
+        </div>
+
+        <div class="card">
+            <h3>آخرین شرط‌ها</h3>
+            <div id="history"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('chart');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+    canvas.width = canvas.offsetWidth * devicePixelRatio;
+    canvas.height = canvas.offsetHeight * devicePixelRatio;
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+}
+resize();
+window.addEventListener('resize', resize);
+
+let price = 100;
+let data = [];
+const maxPoints = 100;
+let balance = 5000000;
+let currentBet = null;
+let countdown = 15;
+let history = [];
+
+for (let i = 0; i < maxPoints; i++) {
+    data.push(price);
+    price += (Math.random() - 0.5) * 1.2;
+}
+price = Math.round(price * 100) / 100;
+
+function draw() {
+    const w = canvas.offsetWidth;
+    const h = canvas.offsetHeight;
+    
+    ctx.clearRect(0, 0, w, h);
+    
+    ctx.strokeStyle = '#1f2937';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 6; i++) {
+        const y = (h / 5) * i;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+    }
+
+    const min = Math.min(...data) - 3;
+    const max = Math.max(...data) + 3;
+    const range = max - min;
+
+    ctx.beginPath();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = data[data.length-1] >= data[data.length-2] ? '#22c55e' : '#ef4444';
+    
+    data.forEach((p, i) => {
+        const x = (i / (maxPoints - 1)) * w;
+        const y = h - ((p - min) / range) * h;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    ctx.lineTo(w, h);
+    ctx.lineTo(0, h);
+    ctx.closePath();
+    const gradient = ctx.createLinearGradient(0, 0, 0, h);
+    gradient.addColorStop(0, data[data.length-1] >= data[data.length-2] ? 'rgba(34,197,94,0.22)' : 'rgba(239,68,68,0.22)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gradient;
+    ctx.fill();
+}
+
+function updatePrice() {
+    const change = (Math.random() - 0.5) * 0.85;
+    price += change;
+    price = Math.round(price * 100) / 100;
+    
+    data.push(price);
+    if (data.length > maxPoints) data.shift();
+    
+    document.getElementById('price').textContent = price.toFixed(2);
+    
+    const lastChange = data[data.length-1] - data[data.length-2];
+    const trendEl = document.getElementById('trend');
+    if (lastChange >= 0) {
+        trendEl.innerHTML = '▲ صعودی';
+        trendEl.className = 'trend up';
+        document.getElementById('price').style.color = '#22c55e';
+    } else {
+        trendEl.innerHTML = '▼ نزولی';
+        trendEl.className = 'trend down';
+        document.getElementById('price').style.color = '#ef4444';
+    }
+    
+    draw();
+}
+
+function tick() {
+    countdown--;
+    document.getElementById('timer').textContent = countdown;
+    
+    if (countdown <= 0) {
+        if (currentBet) {
+            const endPrice = price;
+            const won = (currentBet.direction === 'up' && endPrice > currentBet.startPrice) ||
+                        (currentBet.direction === 'down' && endPrice < currentBet.startPrice);
+            
+            const resultEl = document.getElementById('result');
+            if (won) {
+                const winAmount = Math.floor(currentBet.stake * 1.85);
+                balance += winAmount;
+                resultEl.innerHTML = `<span class="win">برد! +${winAmount.toLocaleString()}</span>`;
+                history.unshift({dir: currentBet.direction, stake: currentBet.stake, result: 'win', amount: winAmount});
+            } else {
+                resultEl.innerHTML = `<span class="lose">باخت!</span>`;
+                history.unshift({dir: currentBet.direction, stake: currentBet.stake, result: 'lose', amount: 0});
+            }
+            updateBalance();
+            renderHistory();
+            currentBet = null;
+        }
+        
+        countdown = 15;
+        document.getElementById('result').innerHTML = '';
+    }
+}
+
+function placeBet(direction) {
+    if (currentBet) {
+        alert('صبر کن تا دور فعلی تموم بشه');
+        return;
+    }
+    const stake = parseInt(document.getElementById('stake').value);
+    if (!stake || stake < 1000) {
+        alert('حداقل مبلغ ۱۰۰۰ تومانه');
+        return;
+    }
+    if (stake > balance) {
+        alert('موجودی کافی نیست');
+        return;
+    }
+    
+    balance -= stake;
+    updateBalance();
+    
+    currentBet = {
+        direction,
+        stake,
+        startPrice: price
+    };
+    
+    document.getElementById('result').innerHTML = 
+        direction === 'up' 
+            ? '<span style="color:#22c55e">شرط روی بالا ثبت شد</span>' 
+            : '<span style="color:#ef4444">شرط روی پایین ثبت شد</span>';
+}
+
+function updateBalance() {
+    document.getElementById('balance').textContent = balance.toLocaleString('fa-IR');
+}
+
+function renderHistory() {
+    const box = document.getElementById('history');
+    if (history.length === 0) {
+        box.innerHTML = '<p style="color:#666; text-align:center;">هنوز شرطی نیست</p>';
+        return;
+    }
+    box.innerHTML = history.slice(0, 8).map(h => `
+        <div class="history-item">
+            <span>${h.dir === 'up' ? '▲ بالا' : '▼ پایین'} | ${h.stake.toLocaleString()}</span>
+            <span class="\( {h.result}"> \){h.result === 'win' ? '+' + h.amount.toLocaleString() : 'باخت'}</span>
+        </div>
+    `).join('');
+}
+
+setInterval(updatePrice, 700);
+setInterval(tick, 1000);
+draw();
+renderHistory();
+</script>
+</body>
+</html>
